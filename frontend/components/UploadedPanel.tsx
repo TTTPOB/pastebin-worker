@@ -36,7 +36,6 @@ export function UploadedPanel({
     "aria-labelledby": "",
     readOnly: true,
     className: "mb-2",
-    labelPlacement: "outside" as const,
   }
 
   return (

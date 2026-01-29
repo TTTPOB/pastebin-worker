@@ -139,12 +139,11 @@ export function CodeEditor({
 
   return (
     <div className={className} {...rest}>
-      <div className={"mb-2 gap-2 flex flex-row flex-wrap items-end" + " "}>
+      <div className={"mb-2 gap-2 flex flex-row" + " "}>
         <Input
           classNames={inputOverrides}
           type={"text"}
           label={"File name"}
-          labelPlacement={"outside"}
           size={"sm"}
           value={filename || ""}
           onValueChange={setFilename}
@@ -153,7 +152,6 @@ export function CodeEditor({
           className={"max-w-[10em]"}
           classNames={autoCompleteOverrides}
           label={"Language"}
-          labelPlacement={"outside"}
           size={"sm"}
           defaultItems={hljs ? hljs.listLanguages().map((lang) => ({ key: lang })) : []}
           // we must not use undefined here to avoid conversion from uncontrolled component to controlled component
@@ -167,7 +165,6 @@ export function CodeEditor({
         <Select
           size={"sm"}
           label={"Indent With"}
-          labelPlacement={"outside"}
           className={"max-w-[10em] text-foreground"}
           classNames={selectOverrides}
           selectedKeys={[formatTabSetting(tabSetting, false)]}

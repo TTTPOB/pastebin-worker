@@ -54,7 +54,7 @@ export function AdminPanel() {
     async ({ reset, prefixOverride }: { reset: boolean; prefixOverride?: string }) => {
       try {
         setIsLoading(true)
-        const u = new URL("/admin/api/pastes", window.location.origin)
+        const u = new URL(`${API_URL}/admin/api/pastes`)
         const p = (prefixOverride ?? prefix).trim()
         if (p.length) u.searchParams.set("prefix", p)
         u.searchParams.set("limit", "100")
@@ -123,7 +123,6 @@ export function AdminPanel() {
             <div className="flex flex-col md:flex-row gap-3 items-start md:items-end">
               <Input
                 label="Prefix"
-                labelPlacement={"outside"}
                 value={prefix}
                 onValueChange={setPrefix}
                 placeholder="e.g. ~proj/"
