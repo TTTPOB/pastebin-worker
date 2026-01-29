@@ -13,6 +13,7 @@
     "preview:frontend": "vite preview --outDir dist/frontend",
     "dev": "wrangler dev --var DEPLOY_URL:http://localhost:8787 --port 8787",
     "gentypes": "wrangler types --strict-vars false",
+    "gen:admin-auth": "node scripts/admin-basic-auth.js",
     "build": "wrangler deploy --dry-run --outdir=dist",
     "delete-paste": "wrangler kv key delete --binding PB",
     "test": "vitest",
