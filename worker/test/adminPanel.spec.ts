@@ -73,13 +73,15 @@ describe("admin panel api", () => {
       }),
     )
     expect(patchResp.status).toStrictEqual(200)
-    const patched = (await patchResp.json()) as { manageUrl: string; expireAt: string }
+    const patched = (await patchResp.json()) as { manageUrl: string; expirationKind: string; expireAt: string }
     expect(patched.manageUrl.startsWith(`${BASE_URL}/${name}:`)).toStrictEqual(true)
     expect(patched.manageUrl.endsWith(`:${newPasswd}`)).toStrictEqual(true)
+    expect(patched.expirationKind).toStrictEqual("ttl")
 
     const metaResp = await workerFetch(ctx, `${BASE_URL}/m/${encodeURIComponent(name)}`)
     expect(metaResp.status).toStrictEqual(200)
-    const meta = (await metaResp.json()) as { expireAt: string }
+    const meta = (await metaResp.json()) as { expirationKind: string; expireAt: string }
+    expect(meta.expirationKind).toStrictEqual("ttl")
     expect(new Date(meta.expireAt).getTime()).toBeGreaterThan(Date.now() + 12 * 60 * 60 * 1000)
 
     const oldDelete = await workerFetch(ctx, new Request(up.manageUrl, { method: "DELETE" }))

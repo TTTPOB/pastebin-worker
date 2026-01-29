@@ -68,6 +68,7 @@ test("meta with role m", async () => {
   const content = `# Hello`
   const ctx = createExecutionContext()
   const uploadResp = await upload(ctx, { c: content })
+  expect(uploadResp.expirationKind).toStrictEqual("ttl")
   expect(new Date(uploadResp.expireAt).getTime()).toStrictEqual(t1.getTime() + uploadResp.expirationSeconds * 1000)
   const url = uploadResp.url
 
@@ -84,6 +85,7 @@ test("meta with role m", async () => {
   const t2 = new Date(2035, 0, 1)
   vi.setSystemTime(t2)
   const updateResp = await upload(ctx, { c: content, e: "1d" }, { method: "PUT", url: uploadResp.manageUrl })
+  expect(updateResp.expirationKind).toStrictEqual("ttl")
   expect(new Date(updateResp.expireAt).getTime()).toStrictEqual(t2.getTime() + updateResp.expirationSeconds * 1000)
   const updatedMeta: MetaResponse = await (await workerFetch(ctx, addRole(url, "m"))).json()
   expect(new Date(updatedMeta.lastModifiedAt).getTime()).toStrictEqual(t2.getTime())

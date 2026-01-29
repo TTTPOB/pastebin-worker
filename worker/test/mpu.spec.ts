@@ -63,6 +63,7 @@ describe("uploadMPU with variant parameters", () => {
       name: "foobarfoobar",
       expire: "100",
     })
+    expect(uploadResp.expirationKind).toStrictEqual("ttl")
     expect(uploadResp.expirationSeconds).toStrictEqual(100)
     expect(uploadResp.url.includes("/~foobarfoobar")).toStrictEqual(true)
   })
