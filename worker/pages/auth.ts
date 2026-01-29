@@ -24,24 +24,31 @@ export function decodeBasicAuth(encodedString: string): {
 function verifyAuthWithPasswdMap(request: Request, passwdMap: Map<string, string>): Response | null {
   if (passwdMap.size === 0) return null
 
-  if (request.headers.has("Authorization")) {
-    const { username, password } = decodeBasicAuth(request.headers.get("Authorization")!)
-    if (!passwdMap.has(username) || !compareSync(password, passwdMap.get(username)!)) {
-      throw new WorkerError(401, "incorrect passwd for basic auth")
-    }
-    return null
+  const unauthorized = (message: string): Response => {
+    return new Response(message, {
+      status: 401,
+      headers: {
+        // Prompts the user for credentials.
+        "WWW-Authenticate": 'Basic charset="UTF-8"',
+        // Never cache auth-gated responses.
+        "Cache-Control": "no-store",
+        Vary: "Authorization",
+      },
+    })
   }
 
-  return new Response("HTTP basic auth is required", {
-    status: 401,
-    headers: {
-      // Prompts the user for credentials.
-      "WWW-Authenticate": 'Basic charset="UTF-8"',
-      // Never cache auth-gated responses.
-      "Cache-Control": "no-store",
-      Vary: "Authorization",
-    },
-  })
+  const raw = request.headers.get("Authorization")
+  if (!raw) return unauthorized("HTTP basic auth is required")
+
+  try {
+    const { username, password } = decodeBasicAuth(raw)
+    if (!passwdMap.has(username) || !compareSync(password, passwdMap.get(username)!)) {
+      return unauthorized("incorrect passwd for basic auth")
+    }
+    return null
+  } catch {
+    return unauthorized("invalid basic auth")
+  }
 }
 
 // return null if auth passes or is not required,
