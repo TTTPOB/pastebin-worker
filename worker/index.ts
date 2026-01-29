@@ -6,6 +6,7 @@ import { handleGet } from "./handlers/handleRead.js"
 import { handleDelete } from "./handlers/handleDelete.js"
 import { cleanExpiredInR2 } from "./storage/storage.js"
 import { handleAdminApi } from "./handlers/handleAdmin.js"
+import { verifyAdminAuth } from "./pages/auth.js"
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -19,7 +20,10 @@ export default {
 } satisfies ExportedHandler<Env>
 
 async function handleRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const isAdminPath = new URL(request.url).pathname.startsWith("/admin")
+  const pathnameRaw = new URL(request.url).pathname
+  const pathnameNorm = pathnameRaw.replace(/\/{2,}/g, "/")
+  const pathnameLower = pathnameNorm.toLowerCase()
+  const isAdminPath = pathnameLower.startsWith("/admin")
   try {
     if (request.method === "OPTIONS") {
       if (isAdminPath) {
@@ -67,6 +71,16 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext):
 }
 
 async function handleNormalRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const pathnameRaw = new URL(request.url).pathname
+  const pathname = pathnameRaw.replace(/\/{2,}/g, "/")
+  const pathnameLower = pathname.toLowerCase()
+  // Centralize admin page auth at the worker entrypoint.
+  // Admin API endpoints perform their own auth checks.
+  if (pathnameLower.startsWith("/admin") && !pathnameLower.startsWith("/admin/api/")) {
+    const authResp = verifyAdminAuth(request, env)
+    if (authResp !== null) return authResp
+  }
+
   // TODO: support HEAD method
   if (request.method === "POST") {
     return await handlePostOrPut(request, env, ctx, false)

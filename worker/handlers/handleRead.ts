@@ -47,7 +47,10 @@ async function handleStaticPages(request: Request, env: Env, _: ExecutionContext
   const url = new URL(request.url)
 
   let path = url.pathname
-  if (path === "/admin/" || path === "/admin") {
+  const normPath = path.replace(/\/{2,}/g, "/")
+  const lowerPath = normPath.toLowerCase()
+
+  if (lowerPath === "/admin/" || lowerPath === "/admin") {
     path = "/admin.html"
   } else if (path.endsWith("/")) {
     path += "index.html"
@@ -56,12 +59,17 @@ async function handleStaticPages(request: Request, env: Env, _: ExecutionContext
   } else if (path.lastIndexOf("/") === 0 && path.indexOf(":") > 0) {
     path = "/index.html" // handle admin URL
   }
-  if (path.startsWith("/assets/") || path === "/favicon.ico" || path === "/index.html" || path === "/admin.html") {
-    if (path === "/admin.html") {
-      const authResponse = verifyAdminAuth(request, env)
-      if (authResponse !== null) {
-        return authResponse
-      }
+
+  const staticPathLower = path.toLowerCase()
+  if (
+    staticPathLower.startsWith("/assets/") ||
+    path === "/favicon.ico" ||
+    path === "/index.html" ||
+    staticPathLower === "/admin.html"
+  ) {
+    if (staticPathLower === "/admin.html") {
+      const authResp = verifyAdminAuth(request, env)
+      if (authResp !== null) return authResp
     }
     const assetsUrl = url
     assetsUrl.pathname = path
@@ -73,7 +81,7 @@ async function handleStaticPages(request: Request, env: Env, _: ExecutionContext
       return new Response(await resp.blob(), {
         headers: {
           "Content-Type": `${pageMime};charset=UTF-8`,
-          ...(path === "/admin.html"
+          ...(staticPathLower === "/admin.html"
             ? { "Cache-Control": "no-store", Vary: "Authorization" }
             : staticPageCacheHeader(env)),
         },
@@ -185,16 +193,29 @@ export async function handleGet(request: Request, env: Env, ctx: ExecutionContex
 
   // handle metadata access
   if (role === "m") {
-    const returnedMetadata: MetaResponse = {
-      lastModifiedAt: new Date(item.metadata.lastModifiedAtUnix * 1000).toISOString(),
-      createdAt: new Date(item.metadata.createdAtUnix * 1000).toISOString(),
-      expireAt: new Date(item.metadata.willExpireAtUnix * 1000).toISOString(),
-      sizeBytes: item.metadata.sizeBytes,
-      location: item.metadata.location,
-      filename: item.metadata.filename,
-      highlightLanguage: item.metadata.highlightLanguage,
-      encryptionScheme: item.metadata.encryptionScheme,
-    }
+    const returnedMetadata: MetaResponse = item.metadata.permanent
+      ? {
+          lastModifiedAt: new Date(item.metadata.lastModifiedAtUnix * 1000).toISOString(),
+          createdAt: new Date(item.metadata.createdAtUnix * 1000).toISOString(),
+          expirationKind: "never",
+          expireAt: "never",
+          sizeBytes: item.metadata.sizeBytes,
+          location: item.metadata.location,
+          filename: item.metadata.filename,
+          highlightLanguage: item.metadata.highlightLanguage,
+          encryptionScheme: item.metadata.encryptionScheme,
+        }
+      : {
+          lastModifiedAt: new Date(item.metadata.lastModifiedAtUnix * 1000).toISOString(),
+          createdAt: new Date(item.metadata.createdAtUnix * 1000).toISOString(),
+          expirationKind: "ttl",
+          expireAt: new Date((item.metadata.willExpireAtUnix ?? 0) * 1000).toISOString(),
+          sizeBytes: item.metadata.sizeBytes,
+          location: item.metadata.location,
+          filename: item.metadata.filename,
+          highlightLanguage: item.metadata.highlightLanguage,
+          encryptionScheme: item.metadata.encryptionScheme,
+        }
     return new Response(isHead ? null : JSON.stringify(returnedMetadata, null, 2), {
       headers: {
         "Content-Type": `application/json;charset=UTF-8`,
