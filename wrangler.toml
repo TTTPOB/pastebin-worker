@@ -2,6 +2,7 @@ name = "pb"
 compatibility_date = "2025-04-24"
 
 workers_dev = false
+preview_urls = true
 main = "worker/index.ts"
 
 [[rules]]
@@ -24,32 +25,32 @@ crons = ["0 0 * * *"]
 
 [[routes]]
 # Refer to https://developers.cloudflare.com/workers/wrangler/configuration/#routes
-pattern = "shz.al"
+pattern = "pb.tpob.io"
 custom_domain = true
 
 [[kv_namespaces]]
 binding = "PB"  # do not touch this
-id = "435f8959b9de485ea48751ba557d90f5"  # id of your KV namespace
+id = "9d298705fafc45ccb163b4bd6fc2c3b1"  # id of your KV namespace
 
 [[r2_buckets]]
 binding = "R2"  # do not touch this
-bucket_name = "pb-shz-al"  # bucket name of your R2 bucket
+bucket_name = "pb-tpob-io"  # bucket name of your R2 bucket
 
 [vars]
 # must be consistent with your routes
-DEPLOY_URL = "https://shz.al"
+DEPLOY_URL = "https://pb.tpob.io"
 
 # url to repo, displayed in the index page
-REPO = "https://github.com/SharzyL/pastebin-worker"
+REPO = "https://github.com/tttpob/pastebin-worker"
 
 # the page title displayed in index page
 INDEX_PAGE_TITLE = "Pastebin Worker"
 
 # the name displayed in TOS
-TOS_MAINTAINER = "Sharzy"
+TOS_MAINTAINER = "tpob"
 
 # the email displayed in TOS
-TOS_MAIL = "pb@shz.al"
+TOS_MAIL = "pb@tpob.io"
 
 # Cache-Control max-age for static pages
 CACHE_STATIC_PAGE_AGE = 7200
@@ -69,7 +70,7 @@ BASIC_AUTH = {}
 
 # Admin-only Basic Auth, used for /admin and /admin/api/*
 # Leave empty to disable admin panel (will return 404)
-ADMIN_BASIC_AUTH = {}
+# ADMIN_BASIC_AUTH = {}
 
 # Files larger than this threshold will be stored in R2
 R2_THRESHOLD = "100K"

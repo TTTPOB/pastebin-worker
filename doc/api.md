@@ -14,7 +14,7 @@ The `Content-Disposition` header is set to `inline` by default. But can be overr
 
 If the paste is encrypted, an `X-PB-Encryption-Scheme` header will be set to the encryption scheme.
 
-If the paste is uploaded with a `lang` parameter, an `X-PB-Highlight-Language` header will be set to the encryption scheme.
+If the paste is uploaded with a `lang` parameter, an `X-PB-Highlight-Language` header will be set to the highlight language.
 
 - `?a=`: optional. Set `Content-Disposition` to `attachment` if present.
 
@@ -99,6 +99,7 @@ $ curl -L https://shz.al/m/i-p-
 {
   "lastModifiedAt": "2025-05-05T10:33:06.114Z",
   "createdAt": "2025-05-01T10:33:06.114Z",
+  "expirationKind": "ttl",
   "expireAt": "2025-05-08T10:33:06.114Z",
   "sizeBytes": 4096,
   "location": "KV",
@@ -109,19 +110,20 @@ $ curl -L https://shz.al/m/i-p-
 
 Explanation of the fields:
 
-- `lastModified`: String. An ISO String representing the last modification time of the paste.
-- `expireAt`: String. An ISO String representing when the paste will expire.
-- `expireAt`: String. An ISO String representing when the paste was created.
+- `lastModifiedAt`: String. An ISO String representing the last modification time of the paste.
+- `createdAt`: String. An ISO String representing when the paste was created.
+- `expirationKind`: String. Either `ttl` or `never`.
+- `expireAt`: String. An ISO String representing when the paste will expire, or the literal string `never`.
 - `sizeBytes`: Integer. The size of the content of the paste in bytes.
 - `filename`: Optional string. The file name of the paste.
 - `location`: String, either "KV" of "R2". Representing whether the paste content is stored in Cloudflare KV storage or R2 object storage.
-- `encryptionScheme`: Optional string. Currently only "AES-GCM" is possible. The encryption scheme used to encrypt the pastused to encrypt the pastused to encrypt the pastused to encrypt the paste.
+- `encryptionScheme`: Optional string. Currently only "AES-GCM" is possible. The encryption scheme used to encrypt the paste.
 
 ## GET `/a/<name>`
 
 Return the HTML converted from the markdown file stored in the paste of name `<name>`. The markdown conversion follows GitHub Flavored Markdown (GFM) Spec, supported by [remark-gfm](https://github.com/remarkjs/remark-gfm).
 
-Syntax highlighting is supported by [prims.js](https://prismjs.com/). LaTeX mathematics is supported by [MathJax](https://www.mathjax.org).
+Syntax highlighting is supported by [highlight.js](https://highlightjs.org/).
 
 If error occurs, the worker returns status code different from `200`:
 
@@ -180,14 +182,14 @@ Upload your paste. It accept parameters in form-data:
 
 - `c`: mandatory. The **content** of your paste, text of binary. It should be no larger than 10 MB. The `filename` in its `Content-Disposition` will be present when fetching the paste.
 
-- `e`: optional. The **expiration** time of the paste. After this period of time, the paste is permanently deleted. It should be an integer or a float point number suffixed with an optional unit (seconds by default). Supported units: `s` (seconds), `m` (minutes), `h` (hours), `d` (days). For example, `360.24` means 360.25 seconds; `25d` is interpreted as 25 days. The actual expiration might be shorter than specified expiration due to limitations imposed by the administrator. If unspecified, a default expiration time setting is used.
+- `e`: optional. The **expiration** time of the paste. After this period of time, the paste is permanently deleted. It can be an integer or a float point number suffixed with an optional unit (seconds by default). Supported units: `s` (seconds), `m` (minutes), `h` (hours), `d` (days). For example, `360.24` means 360.25 seconds; `25d` is interpreted as 25 days. The actual expiration might be shorter than specified expiration due to limitations imposed by the administrator. If unspecified, a default expiration time setting is used. It can also be set to `never` to create a permanent paste.
 
 - `s`: optional. The **password** which allows you to modify and delete the paste. If not specified, the worker will generate a random string as password.
 
 - `n`: optional. The customized **name** of your paste. If not specified, the worker will generate a random string (4 characters by default) as the name. You need to prefix the name with `~` when fetching the paste of customized name. The name is at least 3 characters long, consisting of alphabet, digits and characters in `+_-[]*$=@,;/`.
 
 - `p`: optional. The flag of **private mode**. If specified to any value, the name of the paste is as long as 24 characters. No effect if `n` is used.
--
+
 - `encryption-scheme`: optional. The encryption scheme used in the uploaded paste. It will be returned as `X-PB-Encryption-Scheme` header on fetching paste. Note that this is not the encryption scheme that the backend will perform.
 
 - `lang`: optional. The language of the uploaded paste for syntax highlighting. Should be a lower-case name of language listed in [highlight.js documentation](https://github.com/highlightjs/highlight.js/blob/main/SUPPORTED_LANGUAGES.md). This will be returned as `X-PB-Highlight-Language` header on fetching paste.
@@ -198,6 +200,7 @@ Upload your paste. It accept parameters in form-data:
 {
   "url": "https://shz.al/abcd",
   "manageUrl": "https://shz.al/abcd:w2eHqyZGc@CQzWLN=BiJiQxZ",
+  "expirationKind": "ttl",
   "expirationSeconds": 1209600,
   "expireAt": "2025-05-05T10:33:06.114Z"
 }
@@ -206,9 +209,10 @@ Upload your paste. It accept parameters in form-data:
 Explanation of the fields:
 
 - `url`: String. The URL to fetch the paste. When using a customized name, it looks like `https//shz.al/~myname`.
-- `manageUrl`: String. The URL to update and delete the paste, which is `url` suffixed by `~` and the password.
-- `expirationSeconds`: String. The expiration seconds.
-- `expireAt`: String. An ISO String representing when the paste will expire.
+- `manageUrl`: String. The URL to update and delete the paste, which is `url` suffixed by `:` and the password.
+- `expirationKind`: String. Either `ttl` or `never`.
+- `expirationSeconds`: Integer or null. The expiration seconds, null if `expirationKind` is `never`.
+- `expireAt`: String. An ISO String representing when the paste will expire, or the literal string `never`.
 
 If error occurs, the worker returns status code different from `200`:
 
@@ -224,6 +228,7 @@ $ curl -Fc="kawaii" -Fe=300 -Fn=hitagi https://shz.al  # uploading some text
 {
   "url": "https://shz.al/~hitagi",
   "manageUrl": "https://shz.al/~hitagi:22@-OJWcTOH2jprTJWYadmDv",
+  "expirationKind": "ttl",
   "expirationSeconds": 300,
   "expireAt": "2025-05-05T10:33:06.114Z"
 }
@@ -232,9 +237,13 @@ $ curl -Fc=@panty.jpg -Fn=panty -Fs=12345678 https://shz.al   # uploading a file
 {
   "url": "https://shz.al/~panty",
   "manageUrl": "https://shz.al/~panty:12345678",
+  "expirationKind": "ttl",
   "expirationSeconds": 1209600,
   "expireAt": "2025-05-05T10:33:06.114Z"
 }
+
+# create a permanent paste
+$ curl -Fc="kawaii" -Fe=never https://shz.al
 
 # because `curl` takes some characters as filed separator, the fields should be
 # quoted by double-quotes if the field contains semicolon or comma
