@@ -34,8 +34,30 @@ export function parseExpiration(expirationStr: string): number | null {
   return expirationSeconds
 }
 
+export type ExpirationSpec =
+  | {
+      kind: "ttl"
+      seconds: number
+    }
+  | {
+      kind: "never"
+    }
+
+export function parseExpirationSpec(expirationStr: string): ExpirationSpec | null {
+  const trimmed = expirationStr.trim()
+  if (trimmed.toLowerCase() === "never") {
+    return { kind: "never" }
+  }
+  const seconds = parseExpiration(trimmed)
+  if (seconds === null) return null
+  return { kind: "ttl", seconds }
+}
+
 export function parseExpirationReadable(expirationStr: string): string | null {
   expirationStr = expirationStr.trim()
+  if (expirationStr.toLowerCase() === "never") {
+    return "never"
+  }
   const EXPIRE_REGEX = /^[\d.]+\s*[smhd]?$/
   if (!EXPIRE_REGEX.test(expirationStr)) {
     return null
