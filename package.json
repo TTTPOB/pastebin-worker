@@ -53,6 +53,7 @@
   },
   "dependencies": {
     "@heroui/react": "2.8.7",
+    "@heroui/theme": "^2.4.25",
     "@mjackson/multipart-parser": "^0.8.2",
     "@tailwindcss/vite": "^4.1.18",
     "@types/bcrypt": "^6.0.0",
