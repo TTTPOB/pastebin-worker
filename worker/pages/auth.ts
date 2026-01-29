@@ -56,7 +56,32 @@ export function verifyAuth(request: Request, env: Env): Response | null {
 
 // Admin-only auth: if ADMIN_BASIC_AUTH is not configured, hide admin endpoints.
 export function verifyAdminAuth(request: Request, env: Env): Response | null {
-  const admin_auth = env.ADMIN_BASIC_AUTH as { [username: string]: string } | undefined
+  const raw = (env as unknown as { ADMIN_BASIC_AUTH?: unknown }).ADMIN_BASIC_AUTH
+
+  // Allow configuring ADMIN_BASIC_AUTH as a dashboard Secret (stringified JSON).
+  let admin_auth: Record<string, string> | undefined
+  if (raw === undefined || raw === null) {
+    admin_auth = undefined
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim()
+    if (trimmed.length === 0) {
+      admin_auth = undefined
+    } else {
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(trimmed)
+      } catch {
+        throw new WorkerError(500, "invalid ADMIN_BASIC_AUTH: must be JSON")
+      }
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        throw new WorkerError(500, "invalid ADMIN_BASIC_AUTH: must be an object")
+      }
+      admin_auth = parsed as Record<string, string>
+    }
+  } else {
+    admin_auth = raw as Record<string, string>
+  }
+
   if (admin_auth === undefined || Object.keys(admin_auth).length === 0) {
     return new Response("not found", {
       status: 404,

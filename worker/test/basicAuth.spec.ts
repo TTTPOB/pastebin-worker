@@ -60,4 +60,13 @@ describe("admin basic auth", () => {
     expect(resp.headers.get("Vary") || "").toMatch(/Authorization/i)
     expect(resp.headers.get("Access-Control-Allow-Origin")).toBeNull()
   })
+
+  it("should accept ADMIN_BASIC_AUTH as JSON string secret", async () => {
+    env.ADMIN_BASIC_AUTH = JSON.stringify(
+      Object.fromEntries(Object.entries(users).map(([user, passwd]) => [user, hashSync(passwd, 8)])),
+    ) as unknown as object
+
+    const resp = await workerFetch(ctx, new Request(`${BASE_URL}/admin`, { headers: authHeader }))
+    expect(resp.status).toStrictEqual(200)
+  })
 })
