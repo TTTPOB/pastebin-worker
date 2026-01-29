@@ -9,7 +9,7 @@ import {
   MIN_PASSWD_LEN,
   MAX_PASSWD_LEN,
 } from "../../shared/constants.js"
-import { parsePath, parseSize, parseExpiration } from "../../shared/parsers.js"
+import { parsePath, parseSize, parseExpiration, parseExpirationSpec } from "../../shared/parsers.js"
 import { PasteResponse } from "../../shared/interfaces.js"
 import { MaxFileSizeExceededError, MultipartParseError, parseMultipartRequest } from "@mjackson/multipart-parser"
 import { handleMPUComplete, handleMPUCreate, handleMPUCreateUpdate, handleMPUResume } from "./handleMPU.js"
@@ -103,13 +103,16 @@ export async function handlePostOrPut(
   const uploadedParts = isMPUComplete ? (JSON.parse(contentAsString()) as R2UploadedPart[]) : undefined
 
   // parse expiration
-  let expirationSeconds = parseExpiration(expire)
-  if (expirationSeconds === null) {
+  const expirationSpec = parseExpirationSpec(expire)
+  if (expirationSpec === null) {
     throw new WorkerError(400, `‘${expire}’ is not a valid expiration specification`)
   }
-  const maxExpiration = parseExpiration(env.MAX_EXPIRATION)!
-  if (expirationSeconds > maxExpiration) {
-    expirationSeconds = maxExpiration
+  let expirationSeconds: number | null
+  if (expirationSpec.kind === "never") {
+    expirationSeconds = null
+  } else {
+    const maxExpiration = parseExpiration(env.MAX_EXPIRATION)!
+    expirationSeconds = Math.min(expirationSpec.seconds, maxExpiration)
   }
 
   // check if password is legal
@@ -189,12 +192,21 @@ export async function handlePostOrPut(
       isMPUComplete,
     })
     return makeResponse(
-      {
-        url: accessUrl(pasteName),
-        manageUrl: manageUrl(pasteName, newPasswd),
-        expirationSeconds,
-        expireAt: new Date(now.getTime() + 1000 * expirationSeconds).toISOString(),
-      },
+      expirationSeconds === null
+        ? {
+            url: accessUrl(pasteName),
+            manageUrl: manageUrl(pasteName, newPasswd),
+            expirationKind: "never",
+            expirationSeconds: null,
+            expireAt: "never",
+          }
+        : {
+            url: accessUrl(pasteName),
+            manageUrl: manageUrl(pasteName, newPasswd),
+            expirationKind: "ttl",
+            expirationSeconds,
+            expireAt: new Date(now.getTime() + 1000 * expirationSeconds).toISOString(),
+          },
       { etag: r2Object?.httpEtag },
     )
   } else {
@@ -229,12 +241,21 @@ export async function handlePostOrPut(
     })
 
     return makeResponse(
-      {
-        url: accessUrl(pasteName),
-        manageUrl: manageUrl(pasteName, password),
-        expirationSeconds,
-        expireAt: new Date(now.getTime() + 1000 * expirationSeconds).toISOString(),
-      },
+      expirationSeconds === null
+        ? {
+            url: accessUrl(pasteName),
+            manageUrl: manageUrl(pasteName, password),
+            expirationKind: "never",
+            expirationSeconds: null,
+            expireAt: "never",
+          }
+        : {
+            url: accessUrl(pasteName),
+            manageUrl: manageUrl(pasteName, password),
+            expirationKind: "ttl",
+            expirationSeconds,
+            expireAt: new Date(now.getTime() + 1000 * expirationSeconds).toISOString(),
+          },
       { etag: r2Object?.httpEtag },
     )
   }

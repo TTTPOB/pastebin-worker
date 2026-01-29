@@ -2,7 +2,7 @@ import { verifyAdminAuth } from "../pages/auth.js"
 import { WorkerError } from "../common.js"
 import { getPasteMetadata, patchPasteMetadataAdmin, type PasteMetadata } from "../storage/storage.js"
 import { AdminPasteListItem, AdminPasteListResponse, AdminPasteMetadataPatchRequest } from "../../shared/interfaces.js"
-import { parseExpiration } from "../../shared/parsers.js"
+import { parseExpiration, parseExpirationSpec } from "../../shared/parsers.js"
 import { MAX_PASSWD_LEN, MIN_PASSWD_LEN } from "../../shared/constants.js"
 
 function withAdminSecurityHeaders(resp: Response): Response {
@@ -40,7 +40,8 @@ function metaToAdminItem(env: Env, name: string, meta: PasteMetadata): AdminPast
 
     createdAt: new Date(meta.createdAtUnix * 1000).toISOString(),
     lastModifiedAt: new Date(meta.lastModifiedAtUnix * 1000).toISOString(),
-    expireAt: new Date(meta.willExpireAtUnix * 1000).toISOString(),
+    expirationKind: meta.permanent ? "never" : "ttl",
+    expireAt: meta.permanent ? "never" : new Date((meta.willExpireAtUnix ?? 0) * 1000).toISOString(),
 
     sizeBytes: meta.sizeBytes,
     location: meta.location,
@@ -122,14 +123,18 @@ export async function handleAdminApi(request: Request, env: Env, _ctx: Execution
       throw new WorkerError(400, "no fields to update")
     }
 
-    let expirationSeconds: number | undefined
+    let expirationSeconds: number | null | undefined
     if (body.expire !== undefined) {
-      const parsed = parseExpiration(body.expire)
+      const parsed = parseExpirationSpec(body.expire)
       if (parsed === null) {
         throw new WorkerError(400, `‘${body.expire}’ is not a valid expiration specification`)
       }
-      const maxExpiration = parseExpiration(env.MAX_EXPIRATION)!
-      expirationSeconds = Math.min(parsed, maxExpiration)
+      if (parsed.kind === "never") {
+        expirationSeconds = null
+      } else {
+        const maxExpiration = parseExpiration(env.MAX_EXPIRATION)!
+        expirationSeconds = Math.min(parsed.seconds, maxExpiration)
+      }
     }
 
     if (body.passwd !== undefined) {
