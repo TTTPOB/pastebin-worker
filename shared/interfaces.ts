@@ -25,3 +25,31 @@ export type MPUCreateResponse = {
   key: string
   uploadId: string
 }
+
+export type AdminPasteListItem = {
+  name: string
+  url: string
+  manageUrl: string
+
+  createdAt: string
+  lastModifiedAt: string
+  expireAt: string
+
+  sizeBytes: number
+  location: PasteLocation
+  filename?: string
+  highlightLanguage?: string
+  encryptionScheme?: string
+  accessCounter?: number
+}
+
+export type AdminPasteListResponse = {
+  cursor: string | null
+  listComplete: boolean
+  items: AdminPasteListItem[]
+}
+
+export type AdminPasteMetadataPatchRequest = {
+  expire?: string
+  passwd?: string
+}

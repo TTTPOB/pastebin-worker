@@ -1,12 +1,13 @@
 import { decode, isLegalUrl, WorkerError } from "../common.js"
 import { getDocPage } from "../pages/docs.js"
-import { verifyAuth } from "../pages/auth.js"
+import { verifyAdminAuth } from "../pages/auth.js"
 import mime from "mime"
 import { makeMarkdown } from "../pages/markdown.js"
 import { getPaste, getPasteMetadata, PasteMetadata, PasteWithMetadata } from "../storage/storage.js"
 import { MetaResponse } from "../../shared/interfaces.js"
 import { parsePath } from "../../shared/parsers.js"
 import { MAX_URL_REDIRECT_LEN } from "../../shared/constants.js"
+import { handleAdminApi } from "./handleAdmin.js"
 
 type Headers = Record<string, string>
 
@@ -46,16 +47,18 @@ async function handleStaticPages(request: Request, env: Env, _: ExecutionContext
   const url = new URL(request.url)
 
   let path = url.pathname
-  if (path.endsWith("/")) {
+  if (path === "/admin/" || path === "/admin") {
+    path = "/admin.html"
+  } else if (path.endsWith("/")) {
     path += "index.html"
   } else if (path.endsWith("/index")) {
     path += ".html"
   } else if (path.lastIndexOf("/") === 0 && path.indexOf(":") > 0) {
     path = "/index.html" // handle admin URL
   }
-  if (path.startsWith("/assets/") || path === "/favicon.ico" || path === "/index.html") {
-    if (path === "/index.html") {
-      const authResponse = verifyAuth(request, env)
+  if (path.startsWith("/assets/") || path === "/favicon.ico" || path === "/index.html" || path === "/admin.html") {
+    if (path === "/admin.html") {
+      const authResponse = verifyAdminAuth(request, env)
       if (authResponse !== null) {
         return authResponse
       }
@@ -70,7 +73,9 @@ async function handleStaticPages(request: Request, env: Env, _: ExecutionContext
       return new Response(await resp.blob(), {
         headers: {
           "Content-Type": `${pageMime};charset=UTF-8`,
-          ...staticPageCacheHeader(env),
+          ...(path === "/admin.html"
+            ? { "Cache-Control": "no-store", Vary: "Authorization" }
+            : staticPageCacheHeader(env)),
         },
       })
     }
@@ -78,11 +83,6 @@ async function handleStaticPages(request: Request, env: Env, _: ExecutionContext
 
   const staticPageContent = getDocPage(url.pathname, env)
   if (staticPageContent) {
-    // access to all static pages requires auth
-    const authResponse = verifyAuth(request, env)
-    if (authResponse !== null) {
-      return authResponse
-    }
     return new Response(staticPageContent, {
       headers: {
         "Content-Type": "text/html;charset=UTF-8",
@@ -100,13 +100,17 @@ async function getPasteWithoutContent(env: Env, name: string): Promise<PasteWith
 }
 
 export async function handleGet(request: Request, env: Env, ctx: ExecutionContext, isHead: boolean): Promise<Response> {
+  const url = new URL(request.url)
+
+  if (url.pathname.startsWith("/admin/api/")) {
+    return await handleAdminApi(request, env, ctx, isHead)
+  }
+
   // TODO: handle etag
   const staticPageResp = await handleStaticPages(request, env, ctx)
   if (staticPageResp !== null) {
     return staticPageResp
   }
-
-  const url = new URL(request.url)
 
   const { role, name, ext, filename } = parsePath(url.pathname)
 

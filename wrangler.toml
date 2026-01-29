@@ -67,6 +67,10 @@ MAX_EXPIRATION = "30d"
 # Leave empty to disable auth
 BASIC_AUTH = {}
 
+# Admin-only Basic Auth, used for /admin and /admin/api/*
+# Leave empty to disable admin panel (will return 404)
+ADMIN_BASIC_AUTH = {}
+
 # Files larger than this threshold will be stored in R2
 R2_THRESHOLD = "100K"
 

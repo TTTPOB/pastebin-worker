@@ -1,4 +1,3 @@
-import { verifyAuth } from "../pages/auth.js"
 import { decode, genRandStr, WorkerError } from "../common.js"
 import { createPaste, getPasteMetadata, pasteNameAvailable, updatePaste } from "../storage/storage.js"
 import {
@@ -65,14 +64,6 @@ export async function handlePostOrPut(
   _: ExecutionContext,
   isPut: boolean,
 ): Promise<Response> {
-  if (!isPut) {
-    // only POST requires auth, since PUT request already contains auth
-    const authResponse = verifyAuth(request, env)
-    if (authResponse !== null) {
-      return authResponse
-    }
-  }
-
   const url = new URL(request.url)
 
   let isMPUComplete = false

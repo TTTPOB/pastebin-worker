@@ -21,6 +21,29 @@ export function decodeBasicAuth(encodedString: string): {
   return { username, password }
 }
 
+function verifyAuthWithPasswdMap(request: Request, passwdMap: Map<string, string>): Response | null {
+  if (passwdMap.size === 0) return null
+
+  if (request.headers.has("Authorization")) {
+    const { username, password } = decodeBasicAuth(request.headers.get("Authorization")!)
+    if (!passwdMap.has(username) || !compareSync(password, passwdMap.get(username)!)) {
+      throw new WorkerError(401, "incorrect passwd for basic auth")
+    }
+    return null
+  }
+
+  return new Response("HTTP basic auth is required", {
+    status: 401,
+    headers: {
+      // Prompts the user for credentials.
+      "WWW-Authenticate": 'Basic charset="UTF-8"',
+      // Never cache auth-gated responses.
+      "Cache-Control": "no-store",
+      Vary: "Authorization",
+    },
+  })
+}
+
 // return null if auth passes or is not required,
 // return auth page if auth is required
 // throw WorkerError if auth failed
@@ -28,27 +51,19 @@ export function decodeBasicAuth(encodedString: string): {
 export function verifyAuth(request: Request, env: Env): Response | null {
   // pass auth if 'BASIC_AUTH' is not present
   const basic_auth = env.BASIC_AUTH as { [username: string]: string }
-  const auth_entries = Object.entries(basic_auth)
+  return verifyAuthWithPasswdMap(request, new Map(Object.entries(basic_auth)))
+}
 
-  const passwdMap: Map<string, string> = new Map(auth_entries)
-
-  // pass auth if 'BASIC_AUTH' is empty
-  if (passwdMap.size === 0) return null
-
-  if (request.headers.has("Authorization")) {
-    const { username, password } = decodeBasicAuth(request.headers.get("Authorization")!)
-    if (!passwdMap.has(username) || !compareSync(password, passwdMap.get(username)!)) {
-      throw new WorkerError(401, "incorrect passwd for basic auth")
-    } else {
-      return null
-    }
-  } else {
-    return new Response("HTTP basic auth is required", {
-      status: 401,
+// Admin-only auth: if ADMIN_BASIC_AUTH is not configured, hide admin endpoints.
+export function verifyAdminAuth(request: Request, env: Env): Response | null {
+  const admin_auth = env.ADMIN_BASIC_AUTH as { [username: string]: string } | undefined
+  if (admin_auth === undefined || Object.keys(admin_auth).length === 0) {
+    return new Response("not found", {
+      status: 404,
       headers: {
-        // Prompts the user for credentials.
-        "WWW-Authenticate": 'Basic charset="UTF-8"',
+        "Cache-Control": "no-store",
       },
     })
   }
+  return verifyAuthWithPasswdMap(request, new Map(Object.entries(admin_auth)))
 }

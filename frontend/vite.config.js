@@ -51,6 +51,7 @@ export default defineConfig(({ mode }) => {
         input: {
           index: resolve(__dirname, "index.html"),
           display: resolve(__dirname, "display.html"),
+          admin: resolve(__dirname, "admin.html"),
         },
       },
     },

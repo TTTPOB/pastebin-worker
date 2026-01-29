@@ -143,6 +143,74 @@ export async function getPasteMetadata(env: Env, short: string): Promise<PasteMe
   }
 }
 
+type PasteMetadataPatchOptions = {
+  now: Date
+  expirationSeconds?: number
+  passwd?: string
+}
+
+export async function patchPasteMetadataAdmin(
+  env: Env,
+  pasteName: string,
+  originalMetadata: PasteMetadata,
+  options: PasteMetadataPatchOptions,
+): Promise<PasteMetadata> {
+  const nowUnix = dateToUnix(options.now)
+  const nowUnixFloat = options.now.getTime() / 1000
+
+  // Keep the original willExpireAtUnix if expiration is not changed.
+  const expirationSeconds = options.expirationSeconds ?? Math.max(0, originalMetadata.willExpireAtUnix - nowUnix)
+  const willExpireAtUnix =
+    options.expirationSeconds !== undefined ? nowUnix + options.expirationSeconds : originalMetadata.willExpireAtUnix
+
+  let expirationUnixSpecified =
+    nowUnix +
+    Math.max(
+      options.expirationSeconds !== undefined ? options.expirationSeconds : expirationSeconds,
+      PASTE_EXPIRE_SPECIFIED_MIN,
+    )
+  if (originalMetadata.location === "R2") {
+    expirationUnixSpecified += PASTE_EXPIRE_EXTENSION_FOR_R2
+  }
+
+  // Refuse updating an already-expired paste.
+  if (originalMetadata.willExpireAtUnix < nowUnixFloat) {
+    throw new WorkerError(404, `paste of name '${pasteName}' not found`)
+  }
+
+  const kvItem = await env.PB.getWithMetadata<PasteMetadataInStorage>(pasteName, { type: "arrayBuffer" })
+  if (kvItem.value === null) {
+    throw new WorkerError(404, `paste of name '${pasteName}' not found`)
+  }
+  if (kvItem.metadata === null) {
+    throw new WorkerError(500, `paste of name '${pasteName}' has no metadata`)
+  }
+
+  const metadata: PasteMetadata = {
+    schemaVersion: 1,
+    location: originalMetadata.location,
+    filename: originalMetadata.filename,
+    highlightLanguage: originalMetadata.highlightLanguage,
+    passwd: options.passwd ?? originalMetadata.passwd,
+
+    lastModifiedAtUnix: nowUnix,
+    createdAtUnix: originalMetadata.createdAtUnix,
+    willExpireAtUnix,
+
+    accessCounter: originalMetadata.accessCounter,
+    sizeBytes: originalMetadata.sizeBytes,
+    encryptionScheme: originalMetadata.encryptionScheme,
+  }
+
+  // For R2 objects, KV value is a placeholder string/empty buffer; keep the stored value.
+  await env.PB.put(pasteName, kvItem.value, {
+    metadata,
+    expiration: expirationUnixSpecified,
+  })
+
+  return metadata
+}
+
 interface WriteOptions {
   now: Date
   contentLength: number
