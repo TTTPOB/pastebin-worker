@@ -5,6 +5,7 @@ import { PasteBin } from "../pages/PasteBin.js"
 export const mockedPasteUpload: PasteResponse = {
   url: "https://example.com/abcd",
   manageUrl: "https://example.com/abcd:aaaaaaaaaaaaaaaaaa",
+  expirationKind: "ttl",
   expireAt: "2025-05-01T00:00:00.000Z",
   expirationSeconds: 300,
 }

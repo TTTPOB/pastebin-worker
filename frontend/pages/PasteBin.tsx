@@ -180,8 +180,7 @@ export function PasteBin() {
         .
       </p>
       <p className="my-2">
-        <b>Warning</b>: Only for temporary share <b>(max {maxExpirationReadable})</b>. Files could be deleted without
-        notice!
+        <b>Note</b>: Expiration supports normal TTL <b>(max {maxExpirationReadable})</b> or <b>never</b>.
       </p>
     </div>
   )

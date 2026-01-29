@@ -30,16 +30,18 @@ export function formatSize(size: number): string {
 }
 
 export function verifyExpiration(expiration: string): [boolean, string] {
-  const parsed = parseExpiration(expiration)
+  const trimmed = expiration.trim()
+  if (trimmed.toLowerCase() === "never") {
+    return [true, "Never expires"]
+  }
+  const parsed = parseExpiration(trimmed)
   if (parsed === null) {
     return [false, "Invalid expiration"]
-  } else {
-    if (parsed > maxExpirationSeconds) {
-      return [false, `Exceed max expiration (${maxExpirationReadable})`]
-    } else {
-      return [true, `Expires in ${parseExpirationReadable(expiration)!}`]
-    }
   }
+  if (parsed > maxExpirationSeconds) {
+    return [false, `Exceed max expiration (${maxExpirationReadable})`]
+  }
+  return [true, `Expires in ${parseExpirationReadable(trimmed)!}`]
 }
 
 export function verifyName(name: string): [boolean, string] {

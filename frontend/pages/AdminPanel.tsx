@@ -177,7 +177,9 @@ export function AdminPanel() {
                           {item.location}
                         </Chip>
                       </TableCell>
-                      <TableCell>{new Date(item.expireAt).toLocaleString()}</TableCell>
+                      <TableCell>
+                        {item.expirationKind === "never" ? "Never" : new Date(item.expireAt).toLocaleString()}
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-row gap-2 flex-wrap">
                           <Button size="sm" className={tst} onPress={() => window.open(item.url, "_blank")}>
