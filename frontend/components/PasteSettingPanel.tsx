@@ -40,10 +40,11 @@ export function PanelSettingsPanel({ setting, onSettingChange, ...rest }: PasteS
       <CardHeader className="text-2xl pl-4 pb-2">Settings</CardHeader>
       <Divider className={tst} />
       <CardBody>
-        <div className="gap-4 mb-3 flex flex-row">
+        <div className="gap-4 mb-3 flex flex-row flex-wrap items-end">
           <Input
             type="text"
             label="Expiration"
+            labelPlacement={"outside"}
             // to avoid duplicated name, see https://github.com/adobe/react-spectrum/discussions/8037
             aria-labelledby=""
             classNames={{
@@ -61,6 +62,7 @@ export function PanelSettingsPanel({ setting, onSettingChange, ...rest }: PasteS
           <Input
             type="password"
             label="Password"
+            labelPlacement={"outside"}
             aria-labelledby=""
             value={setting.password}
             onValueChange={(p) => onSettingChange({ ...setting, password: p })}
@@ -95,6 +97,7 @@ export function PanelSettingsPanel({ setting, onSettingChange, ...rest }: PasteS
               value={setting.name}
               onValueChange={(n) => onSettingChange({ ...setting, name: n })}
               type="text"
+              labelPlacement={"outside"}
               classNames={radioClassNames}
               isInvalid={!verifyName(setting.name)[0]}
               errorMessage={verifyName(setting.name)[1]}
@@ -113,6 +116,7 @@ export function PanelSettingsPanel({ setting, onSettingChange, ...rest }: PasteS
               value={setting.manageUrl}
               onValueChange={(m) => onSettingChange({ ...setting, manageUrl: m })}
               type="text"
+              labelPlacement={"outside"}
               className="shrink"
               isInvalid={!verifyManageUrl(setting.manageUrl)[0]}
               errorMessage={verifyManageUrl(setting.manageUrl)[1]}
