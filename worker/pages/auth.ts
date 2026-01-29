@@ -93,7 +93,9 @@ export function verifyAdminAuth(request: Request, env: Env): Response | null {
     return new Response("not found", {
       status: 404,
       headers: {
+        // Hide the admin panel when not configured; also avoid any caching.
         "Cache-Control": "no-store",
+        Vary: "Authorization",
       },
     })
   }
