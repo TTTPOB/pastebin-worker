@@ -1,5 +1,6 @@
 import { unified } from "unified"
-import { Root } from "mdast"
+import type { Root } from "mdast"
+import { unified } from "unified"
 import remarkParse from "remark-parse"
 import remarkGfm from "remark-gfm"
 import remarkRehype from "remark-rehype"

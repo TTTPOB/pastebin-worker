@@ -50,15 +50,13 @@ export type MPUCreateResponse = {
   uploadId: string
 }
 
-export type AdminPasteListItem = {
+type AdminPasteListItemBase = {
   name: string
   url: string
   manageUrl: string
 
   createdAt: string
   lastModifiedAt: string
-  expirationKind: ExpirationKind
-  expireAt: string | "never"
 
   sizeBytes: number
   location: PasteLocation
@@ -67,6 +65,16 @@ export type AdminPasteListItem = {
   encryptionScheme?: string
   accessCounter?: number
 }
+
+export type AdminPasteListItem =
+  | (AdminPasteListItemBase & {
+      expirationKind: "ttl"
+      expireAt: string
+    })
+  | (AdminPasteListItemBase & {
+      expirationKind: "never"
+      expireAt: "never"
+    })
 
 export type AdminPasteListResponse = {
   cursor: string | null

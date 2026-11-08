@@ -33,15 +33,13 @@ function makeManageUrl(env: Env, name: string, passwd: string) {
 }
 
 function metaToAdminItem(env: Env, name: string, meta: PasteMetadata): AdminPasteListItem {
-  return {
+  const base = {
     name,
     url: makeAccessUrl(env, name),
     manageUrl: makeManageUrl(env, name, meta.passwd),
 
     createdAt: new Date(meta.createdAtUnix * 1000).toISOString(),
     lastModifiedAt: new Date(meta.lastModifiedAtUnix * 1000).toISOString(),
-    expirationKind: meta.permanent ? "never" : "ttl",
-    expireAt: meta.permanent ? "never" : new Date((meta.willExpireAtUnix ?? 0) * 1000).toISOString(),
 
     sizeBytes: meta.sizeBytes,
     location: meta.location,
@@ -49,6 +47,16 @@ function metaToAdminItem(env: Env, name: string, meta: PasteMetadata): AdminPast
     highlightLanguage: meta.highlightLanguage,
     encryptionScheme: meta.encryptionScheme,
     accessCounter: meta.accessCounter,
+  }
+
+  if (meta.permanent) {
+    return { ...base, expirationKind: "never", expireAt: "never" }
+  }
+
+  return {
+    ...base,
+    expirationKind: "ttl",
+    expireAt: new Date((meta.willExpireAtUnix ?? 0) * 1000).toISOString(),
   }
 }
 
@@ -77,19 +85,36 @@ export async function handleAdminApi(request: Request, env: Env, _ctx: Execution
     const cursor = url.searchParams.get("cursor") || undefined
     const prefix = url.searchParams.get("prefix") || undefined
 
-    const listed = await env.PB.list({ cursor, prefix, limit })
+    const listedUnknown: unknown = await env.PB.list({ cursor, prefix, limit })
+    if (!listedUnknown || typeof listedUnknown !== "object") {
+      throw new WorkerError(500, "invalid kv list response")
+    }
+    const listed = listedUnknown as Record<string, unknown>
     const items: AdminPasteListItem[] = []
 
-    for (const key of listed.keys) {
+    const keysRaw = listed["keys"]
+    const keys = Array.isArray(keysRaw) ? keysRaw : []
+    for (const key of keys) {
       // Always load via getPasteMetadata to ensure migrated shape and consistent expiration behavior.
-      const meta = await getPasteMetadata(env, key.name)
+      const keyName =
+        key && typeof key === "object" && "name" in key && typeof (key as { name?: unknown }).name === "string"
+          ? (key as { name: string }).name
+          : ""
+      if (!keyName) continue
+
+      const meta = await getPasteMetadata(env, keyName)
       if (!meta) continue
-      items.push(metaToAdminItem(env, key.name, meta))
+      items.push(metaToAdminItem(env, keyName, meta))
     }
 
+    const cursorRaw = listed["cursor"]
+    const cursorValue = typeof cursorRaw === "string" ? cursorRaw : ""
+    const listCompleteRaw = listed["list_complete"]
+    const listCompleteValue = typeof listCompleteRaw === "boolean" ? listCompleteRaw : Boolean(listCompleteRaw)
+
     const resp: AdminPasteListResponse = {
-      cursor: listed.cursor || null,
-      listComplete: listed.list_complete,
+      cursor: cursorValue || null,
+      listComplete: listCompleteValue,
       items,
     }
 
@@ -114,9 +139,20 @@ export async function handleAdminApi(request: Request, env: Env, _ctx: Execution
 
     let body: AdminPasteMetadataPatchRequest
     try {
-      body = (await request.json()) as AdminPasteMetadataPatchRequest
+      const unknownBody: unknown = await request.json()
+      if (typeof unknownBody !== "object" || unknownBody === null) {
+        throw new WorkerError(400, "invalid json")
+      }
+      body = unknownBody as AdminPasteMetadataPatchRequest
     } catch {
       throw new WorkerError(400, "invalid json")
+    }
+
+    if (body.expire !== undefined && typeof body.expire !== "string") {
+      throw new WorkerError(400, "invalid expire")
+    }
+    if (body.passwd !== undefined && typeof body.passwd !== "string") {
+      throw new WorkerError(400, "invalid passwd")
     }
 
     if (!body || (body.expire === undefined && body.passwd === undefined)) {

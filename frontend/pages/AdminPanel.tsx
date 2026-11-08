@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import {
   Button,
@@ -46,42 +46,233 @@ export function AdminPanel() {
   const [listComplete, setListComplete] = useState(false)
   const [items, setItems] = useState<AdminPasteListItem[]>([])
 
+  const [selectedNames, setSelectedNames] = useState<Set<string>>(() => new Set())
+
   const [isLoading, setIsLoading] = useState(false)
 
   const canLoadMore = !isLoading && !listComplete
+
+  const selectedCount = selectedNames.size
+
+  const visibleNames = useMemo(() => items.map((x) => x.name), [items])
+  const selectedVisibleCount = useMemo(() => {
+    let n = 0
+    for (const name of visibleNames) {
+      if (selectedNames.has(name)) n += 1
+    }
+    return n
+  }, [selectedNames, visibleNames])
+
+  const allVisibleSelected = items.length > 0 && selectedVisibleCount === items.length
+  const someVisibleSelected = selectedVisibleCount > 0 && selectedVisibleCount < items.length
+
+  const visibleSelectRef = useRef<HTMLInputElement | null>(null)
+  useEffect(() => {
+    if (!visibleSelectRef.current) return
+    visibleSelectRef.current.indeterminate = someVisibleSelected
+  }, [someVisibleSelected])
+
+  const fetchPage = useCallback(
+    async ({
+      cursor,
+      prefix,
+      limit,
+    }: {
+      cursor: string | null
+      prefix: string
+      limit: number
+    }): Promise<AdminPasteListResponse | null> => {
+      const u = new URL(`${API_URL}/admin/api/pastes`)
+      if (prefix.length) u.searchParams.set("prefix", prefix)
+      u.searchParams.set("limit", String(limit))
+      if (cursor) u.searchParams.set("cursor", cursor)
+
+      const resp = await fetch(u)
+      if (!resp.ok) {
+        await handleFailedResp("Failed to fetch admin list", resp)
+        return null
+      }
+      return (await resp.json()) as AdminPasteListResponse
+    },
+    [handleFailedResp],
+  )
 
   const load = useCallback(
     async ({ reset, prefixOverride }: { reset: boolean; prefixOverride?: string }) => {
       try {
         setIsLoading(true)
-        const u = new URL(`${API_URL}/admin/api/pastes`)
         const p = (prefixOverride ?? prefix).trim()
-        if (p.length) u.searchParams.set("prefix", p)
-        u.searchParams.set("limit", "100")
         const nextCursor = reset ? null : cursor
-        if (nextCursor) u.searchParams.set("cursor", nextCursor)
 
-        const resp = await fetch(u)
-        if (!resp.ok) {
-          await handleFailedResp("Failed to fetch admin list", resp)
-          return
-        }
-        const json: AdminPasteListResponse = await resp.json()
+        const json = await fetchPage({ cursor: nextCursor, prefix: p, limit: 100 })
+        if (!json) return
         setCursor(json.cursor)
         setListComplete(json.listComplete)
         setItems((prev) => (reset ? json.items : [...prev, ...json.items]))
+
+        if (reset) setSelectedNames(new Set())
       } catch (e) {
         handleError("Failed to fetch admin list", e as Error)
       } finally {
         setIsLoading(false)
       }
     },
-    [cursor, handleError, handleFailedResp, prefix],
+    [cursor, fetchPage, handleError, prefix],
   )
 
   useEffect(() => {
-    load({ reset: true })
+    void load({ reset: true })
   }, [])
+
+  const loadAll = useCallback(
+    async ({ prefixOverride }: { prefixOverride?: string } = {}) => {
+      const p = (prefixOverride ?? prefix).trim()
+      try {
+        setIsLoading(true)
+
+        let cur: string | null = null
+        let complete = false
+        const all: AdminPasteListItem[] = []
+
+        while (!complete) {
+          const json = await fetchPage({ cursor: cur, prefix: p, limit: 1000 })
+          if (!json) return null
+          all.push(...json.items)
+          cur = json.cursor
+          complete = json.listComplete
+        }
+
+        setItems(all)
+        setCursor(cur)
+        setListComplete(true)
+        return all
+      } catch (e) {
+        handleError("Failed to fetch full admin list", e as Error)
+        return null
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [fetchPage, handleError, prefix],
+  )
+
+  const toggleSelected = useCallback((name: string, checked: boolean) => {
+    setSelectedNames((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(name)
+      else next.delete(name)
+      return next
+    })
+  }, [])
+
+  const selectVisible = useCallback(() => {
+    setSelectedNames((prev) => {
+      const next = new Set(prev)
+      for (const name of visibleNames) next.add(name)
+      return next
+    })
+  }, [visibleNames])
+
+  const deselectVisible = useCallback(() => {
+    setSelectedNames((prev) => {
+      const next = new Set(prev)
+      for (const name of visibleNames) next.delete(name)
+      return next
+    })
+  }, [visibleNames])
+
+  const invertVisible = useCallback(() => {
+    setSelectedNames((prev) => {
+      const next = new Set(prev)
+      for (const name of visibleNames) {
+        if (next.has(name)) next.delete(name)
+        else next.add(name)
+      }
+      return next
+    })
+  }, [visibleNames])
+
+  const selectAllItems = useCallback(async () => {
+    const all = await loadAll()
+    if (!all) return
+    setSelectedNames(new Set(all.map((x) => x.name)))
+  }, [loadAll])
+
+  const invertAllItems = useCallback(async () => {
+    const all = await loadAll()
+    if (!all) return
+    setSelectedNames((prev) => {
+      const next = new Set<string>()
+      for (const x of all) {
+        if (!prev.has(x.name)) next.add(x.name)
+      }
+      return next
+    })
+  }, [loadAll])
+
+  const clearSelection = useCallback(() => {
+    setSelectedNames(new Set())
+  }, [])
+
+  async function onDeleteSelected() {
+    if (!selectedCount) return
+    const ok = window.confirm(`Delete ${selectedCount} selected item(s)?`)
+    if (!ok) return
+
+    try {
+      setIsLoading(true)
+      const selectedItems = items.filter((x) => selectedNames.has(x.name))
+
+      const concurrency = 5
+      let idx = 0
+      const succeeded = new Set<string>()
+      const failed: Array<{ name: string; status: number | "error" }> = []
+
+      const worker = async () => {
+        while (true) {
+          const i = idx
+          idx += 1
+          const item = selectedItems[i]
+          if (!item) return
+          try {
+            const resp = await fetch(item.manageUrl, { method: "DELETE" })
+            if (!resp.ok) {
+              failed.push({ name: item.name, status: resp.status })
+              continue
+            }
+            succeeded.add(item.name)
+          } catch {
+            failed.push({ name: item.name, status: "error" })
+          }
+        }
+      }
+
+      await Promise.all(Array.from({ length: Math.min(concurrency, selectedItems.length) }, () => worker()))
+
+      if (succeeded.size) {
+        setItems((prev) => prev.filter((x) => !succeeded.has(x.name)))
+        setSelectedNames((prev) => {
+          const next = new Set(prev)
+          for (const name of succeeded) next.delete(name)
+          return next
+        })
+      }
+
+      if (!failed.length) {
+        showModal("Deleted", "It may take ~60 seconds for deletion to propagate")
+        return
+      }
+      showModal(
+        "Partial delete",
+        `Deleted ${succeeded.size}/${selectedItems.length}. Failed: ${failed.length}. (See console for details)`,
+      )
+      console.warn("Bulk delete failed items:", failed)
+    } catch (e) {
+      handleError("Failed to delete selected items", e as Error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   async function onDelete(item: AdminPasteListItem) {
     const ok = window.confirm(`Delete '${item.name}'?`)
@@ -95,6 +286,12 @@ export function AdminPanel() {
       }
       showModal("Deleted", "It may take ~60 seconds for deletion to propagate")
       setItems((prev) => prev.filter((x) => x.name !== item.name))
+      setSelectedNames((prev) => {
+        if (!prev.has(item.name)) return prev
+        const next = new Set(prev)
+        next.delete(item.name)
+        return next
+      })
     } catch (e) {
       handleError(`Failed to delete '${item.name}'`, e as Error)
     } finally {
@@ -129,7 +326,12 @@ export function AdminPanel() {
                 className="w-full md:max-w-[28rem]"
               />
               <div className="flex flex-row gap-2">
-                <Button color="primary" className={tst} isDisabled={isLoading} onPress={() => load({ reset: true })}>
+                <Button
+                  color="primary"
+                  className={tst}
+                  isDisabled={isLoading}
+                  onPress={() => void load({ reset: true })}
+                >
                   Search
                 </Button>
                 <Button
@@ -139,7 +341,7 @@ export function AdminPanel() {
                     setPrefix("")
                     setCursor(null)
                     setListComplete(false)
-                    load({ reset: true, prefixOverride: "" })
+                    void load({ reset: true, prefixOverride: "" })
                   }}
                 >
                   Reset
@@ -148,8 +350,67 @@ export function AdminPanel() {
             </div>
 
             <div className="mt-4">
+              <div className="mb-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                <div className="text-small text-foreground-500">
+                  Selected: {selectedCount}
+                  {items.length ? ` (visible: ${selectedVisibleCount}/${items.length})` : ""}
+                </div>
+                <div className="flex flex-row gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    className={tst}
+                    isDisabled={isLoading || !items.length}
+                    onPress={() => selectVisible()}
+                  >
+                    Select visible
+                  </Button>
+                  <Button
+                    size="sm"
+                    className={tst}
+                    isDisabled={isLoading || !items.length}
+                    onPress={() => invertVisible()}
+                  >
+                    Invert visible
+                  </Button>
+                  <Button size="sm" className={tst} isDisabled={isLoading} onPress={() => void selectAllItems()}>
+                    Select all
+                  </Button>
+                  <Button size="sm" className={tst} isDisabled={isLoading} onPress={() => void invertAllItems()}>
+                    Invert all
+                  </Button>
+                  <Button
+                    size="sm"
+                    className={tst}
+                    isDisabled={isLoading || !selectedCount}
+                    onPress={() => clearSelection()}
+                  >
+                    Clear
+                  </Button>
+                  <Button
+                    size="sm"
+                    color="danger"
+                    className={tst}
+                    isDisabled={isLoading || !selectedCount}
+                    onPress={() => void onDeleteSelected()}
+                  >
+                    Delete selected
+                  </Button>
+                </div>
+              </div>
               <Table aria-label="Admin paste list" className={tst}>
                 <TableHeader>
+                  <TableColumn>
+                    <input
+                      ref={visibleSelectRef}
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={(e) => {
+                        if (e.target.checked) selectVisible()
+                        else deselectVisible()
+                      }}
+                      aria-label="Select visible"
+                    />
+                  </TableColumn>
                   <TableColumn>Name</TableColumn>
                   <TableColumn>Filename</TableColumn>
                   <TableColumn>Size</TableColumn>
@@ -165,6 +426,14 @@ export function AdminPanel() {
                 >
                   {(item) => (
                     <TableRow key={item.name}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedNames.has(item.name)}
+                          onChange={(e) => toggleSelected(item.name, e.target.checked)}
+                          aria-label={`Select ${item.name}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         <Link href={item.url} className={tst}>
                           <code>{item.name}</code>
@@ -195,7 +464,7 @@ export function AdminPanel() {
                           <Button size="sm" className={tst} onPress={() => (location.href = toEditUrl(item.manageUrl))}>
                             Edit
                           </Button>
-                          <Button size="sm" color="danger" className={tst} onPress={() => onDelete(item)}>
+                          <Button size="sm" color="danger" className={tst} onPress={() => void onDelete(item)}>
                             Delete
                           </Button>
                         </div>
@@ -210,7 +479,7 @@ export function AdminPanel() {
               <div className="text-small text-foreground-500">
                 {listComplete ? "End of list" : cursor ? `Cursor: ${cursor}` : ""}
               </div>
-              <Button className={tst} isDisabled={!canLoadMore} onPress={() => load({ reset: false })}>
+              <Button className={tst} isDisabled={!canLoadMore} onPress={() => void load({ reset: false })}>
                 Load more
               </Button>
             </div>

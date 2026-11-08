@@ -44,11 +44,11 @@ describe("admin panel api", () => {
     expect(resp.headers.get("Cache-Control")).toStrictEqual("no-store")
     expect(resp.headers.get("Vary") || "").toMatch(/Authorization/i)
     expect(resp.headers.get("Access-Control-Allow-Origin")).toBeNull()
-    const json = (await resp.json()) as {
+    const json: {
       cursor: string | null
       listComplete: boolean
       items: Array<{ name: string; url: string; manageUrl: string }>
-    }
+    } = await resp.json()
 
     const found = json.items.find((x) => x.name === name)
     expect(found).toBeDefined()
@@ -73,14 +73,14 @@ describe("admin panel api", () => {
       }),
     )
     expect(patchResp.status).toStrictEqual(200)
-    const patched = (await patchResp.json()) as { manageUrl: string; expirationKind: string; expireAt: string }
+    const patched: { manageUrl: string; expirationKind: string; expireAt: string } = await patchResp.json()
     expect(patched.manageUrl.startsWith(`${BASE_URL}/${name}:`)).toStrictEqual(true)
     expect(patched.manageUrl.endsWith(`:${newPasswd}`)).toStrictEqual(true)
     expect(patched.expirationKind).toStrictEqual("ttl")
 
     const metaResp = await workerFetch(ctx, `${BASE_URL}/m/${encodeURIComponent(name)}`)
     expect(metaResp.status).toStrictEqual(200)
-    const meta = (await metaResp.json()) as { expirationKind: string; expireAt: string }
+    const meta: { expirationKind: string; expireAt: string } = await metaResp.json()
     expect(meta.expirationKind).toStrictEqual("ttl")
     expect(new Date(meta.expireAt).getTime()).toBeGreaterThan(Date.now() + 12 * 60 * 60 * 1000)
 
